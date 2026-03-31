@@ -57,11 +57,27 @@ export default function NewRequestScreen() {
                     else if (data.results && Array.isArray(data.results)) records = data.results;
                     else if (data.data && Array.isArray(data.data)) records = data.data;
                     
-                    // Map the records directly from the API without hardcoded filtering
-                    const mappedLeaves = records.map((r: any) => ({
-                        id: String(r.id || r.pk || r.value),
-                        name: r.name || r.leave_type || r.title || r.type || r.master_value || r.leave_name || `Type ${r.id}`
-                    }));
+                    // Extract and filter specifically for Casual and Sick leaves
+                    let mappedLeaves = records
+                        .map((r: any) => ({
+                            id: String(r.id || r.pk || r.value),
+                            name: r.name || r.leave_type || r.title || r.type || r.master_value || r.leave_name || `Type ${r.id}`
+                        }))
+                        .filter((leave: any) => {
+                            const lowercaseName = leave.name.toLowerCase();
+                            return lowercaseName.includes('casual') || lowercaseName.includes('sick');
+                        });
+
+                    // Deduplicate by name to prevent multiple entries (e.g., two "Casual Leave" options)
+                    const seenNames = new Set();
+                    mappedLeaves = mappedLeaves.filter((leave: any) => {
+                        const nameKey = leave.name.trim().toLowerCase();
+                        if (seenNames.has(nameKey)) {
+                            return false;
+                        }
+                        seenNames.add(nameKey);
+                        return true;
+                    });
 
                     if (mappedLeaves.length > 0) {
                         setLeaveTypes(mappedLeaves);
@@ -124,7 +140,7 @@ export default function NewRequestScreen() {
         try {
             const authToken = await AsyncStorage.getItem('auth_token');
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // Increased timeout to 30 seconds
 
             const response = await fetch(url, {
                 method: 'POST',

@@ -25,7 +25,7 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
       ],
-      "package": "com.hafis_riswan.MYOMEGA"
+      "package": "com.imcbs.MYOMEGA"
     },
     "web": {
       "output": "static",

@@ -601,7 +601,7 @@ export default function Dashboard() {
                 </View>
 
                 {/* Work History (Last 3 Days) */}
-                {!isPunchedIn && (
+                {/* {!isPunchedIn && (
                     <View style={styles.bottomPanel}>
                         <Text style={styles.bottomPanelTitle}>Recent Work History (Last 3 Days)</Text>
                         {workHistory.length > 0 ? (
@@ -617,7 +617,7 @@ export default function Dashboard() {
                             <Text style={styles.emptyLogsText}>No recent work history.</Text>
                         )}
                     </View>
-                )}
+                )} */}
 
                 {/* Services Section */}
                 <View style={styles.servicesContainer}>
