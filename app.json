@@ -23,8 +23,6 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
       ],
       "package": "com.hafis_riswan.MYOMEGA"
@@ -55,7 +53,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "1ac14247-da09-4aef-9861-3fb6d2af5e9d"
+        "projectId": "7f9d3c2e-fd5f-4024-b5e1-6d7306bbc3d3"
       }
     }
   }

@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../constants/Colors';
 
 export default function LoginScreen() {
@@ -10,6 +10,33 @@ export default function LoginScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+    useEffect(() => {
+        const checkExistingLogin = async () => {
+            try {
+                const token = await AsyncStorage.getItem('auth_token');
+                const loginTimestampStr = await AsyncStorage.getItem('login_timestamp');
+                
+                if (token && loginTimestampStr) {
+                    const loginTimestamp = parseInt(loginTimestampStr, 10);
+                    const now = Date.now();
+                    const hoursPassed = (now - loginTimestamp) / (1000 * 60 * 60);
+
+                    // If less than 22 hours have passed, auto-login
+                    if (hoursPassed < 22) {
+                        router.replace('/dashboard');
+                        return;
+                    }
+                }
+            } catch (error) {
+                console.error("Error auto-logging in:", error);
+            } finally {
+                setIsCheckingAuth(false);
+            }
+        };
+        checkExistingLogin();
+    }, []);
 
     const handleLogin = async () => {
         if (!email || !password) {
@@ -37,6 +64,7 @@ export default function LoginScreen() {
                 // Save Token and User Data
                 await AsyncStorage.setItem('auth_token', data.access);
                 await AsyncStorage.setItem('user_data', JSON.stringify(data.user));
+                await AsyncStorage.setItem('login_timestamp', Date.now().toString());
 
                 // Navigate to Dashboard
                 router.replace('/dashboard');
@@ -53,79 +81,90 @@ export default function LoginScreen() {
         }
     };
 
+    if (isCheckingAuth) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+                <Text style={{ marginTop: 10, color: Colors.textSecondary }}>Loading app...</Text>
+            </View>
+        );
+    }
+
     return (
         <SafeAreaView style={styles.container}>
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardView}
             >
-                <View style={styles.contentContainer}>
+                <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+                    <View style={styles.contentContainer}>
 
-                    {/* Header / Logo Area */}
-                    <View style={styles.headerContainer}>
-                        <View style={styles.logoContainer}>
-                            <Image
-                                source={require('../assets/images/logo.jpg')}
-                                style={styles.logoImage}
-                                resizeMode="contain"
-                            />
+                        {/* Header / Logo Area */}
+                        <View style={styles.headerContainer}>
+                            <View style={styles.logoContainer}>
+                                <Image
+                                    source={require('../assets/images/logo.jpg')}
+                                    style={styles.logoImage}
+                                    resizeMode="contain"
+                                />
+                            </View>
+                            <Text style={styles.appName}>
+
+                                MY<Text style={styles.appNameHighlight}>OMEGA</Text>
+                            </Text>
+                            <Text style={styles.welcomeText}>Welcome Back</Text>
+                            <Text style={styles.subText}>Sign in to continue</Text>
                         </View>
-                        <Text style={styles.appName}>
 
-                            MY<Text style={styles.appNameHighlight}>OMEGA</Text>
-                        </Text>
-                        <Text style={styles.welcomeText}>Welcome Back</Text>
-                        <Text style={styles.subText}>Sign in to continue</Text>
+                        {/* Form Area */}
+                        <View style={styles.formContainer}>
+                            <View style={styles.inputContainer}>
+                                <Text style={styles.inputLabel}>Email</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Enter your email"
+                                    placeholderTextColor="#A0A0A0"
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    autoCapitalize="none"
+                                    keyboardType="email-address"
+                                />
+                            </View>
+
+                            <View style={styles.inputContainer}>
+                                <Text style={styles.inputLabel}>Password</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Enter your password"
+                                    placeholderTextColor="#A0A0A0"
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    secureTextEntry
+                                />
+                            </View>
+
+                            <TouchableOpacity style={styles.forgotPassword}>
+                                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+                                onPress={handleLogin}
+                                activeOpacity={0.8}
+                                disabled={loading}
+                            >
+                                {loading ? (
+                                    <ActivityIndicator color={Colors.white} />
+                                ) : (
+                                    <>
+                                        <Text style={styles.loginButtonText}>Login</Text>
+                                        <Ionicons name="arrow-forward" size={20} color={Colors.white} />
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
                     </View>
-
-                    {/* Form Area */}
-                    <View style={styles.formContainer}>
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.inputLabel}>Email</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter your email"
-                                placeholderTextColor="#A0A0A0"
-                                value={email}
-                                onChangeText={setEmail}
-                                autoCapitalize="none"
-                                keyboardType="email-address"
-                            />
-                        </View>
-
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.inputLabel}>Password</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter your password"
-                                placeholderTextColor="#A0A0A0"
-                                value={password}
-                                onChangeText={setPassword}
-                                secureTextEntry
-                            />
-                        </View>
-
-                        <TouchableOpacity style={styles.forgotPassword}>
-                            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.loginButton, loading && styles.loginButtonDisabled]}
-                            onPress={handleLogin}
-                            activeOpacity={0.8}
-                            disabled={loading}
-                        >
-                            {loading ? (
-                                <ActivityIndicator color={Colors.white} />
-                            ) : (
-                                <>
-                                    <Text style={styles.loginButtonText}>Login</Text>
-                                    <Ionicons name="arrow-forward" size={20} color={Colors.white} />
-                                </>
-                            )}
-                        </TouchableOpacity>
-                    </View>
-                </View>
+                </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );

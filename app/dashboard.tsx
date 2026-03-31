@@ -1,14 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 import { Stack, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, Dimensions, Modal, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, Modal, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../constants/Colors';
+import { Config } from '../constants/Config';
 
 // Office Location Constants
-const OFFICE_LATITUDE = 10.8505000;   // Tirur latitude
-const OFFICE_LONGITUDE = 76.2711000;  // Tirur longitude
-const ALLOWED_RADIUS_METERS = 100;    // 100 meters radius
+const OFFICE_LATITUDE = 10.921105;   // Tirur latitude
+const OFFICE_LONGITUDE = 75.925967;  // Tirur longitude
+const ALLOWED_RADIUS_METERS = 200;    // 100 meters radius
 
 // Storage Keys Helper
 const getKeys = (userId: string | number) => ({
@@ -61,6 +63,7 @@ export default function Dashboard() {
     // UI State
     const [isProfileVisible, setIsProfileVisible] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [isPunching, setIsPunching] = useState(false);
 
     // Load User & State
     useEffect(() => {
@@ -70,11 +73,22 @@ export default function Dashboard() {
     const loadUserData = async () => {
         try {
             const userData = await AsyncStorage.getItem('user_data');
+
             if (userData) {
+                const loginTimestamp = await AsyncStorage.getItem('login_timestamp');
+                const now = Date.now();
+                const twentyTwoHoursInMs = 22 * 60 * 60 * 1000;
+
+                if (!loginTimestamp || (now - parseInt(loginTimestamp, 10)) > twentyTwoHoursInMs) {
+                    Alert.alert("Session Expired", "Session expired. Please login again.");
+                    await handleLogout();
+                    return;
+                }
+
                 const parsedUser = JSON.parse(userData);
                 setUser(parsedUser);
                 await loadState(parsedUser.id);
-                await fetchAttendanceRecords(); // Fetch attendance records
+                await fetchAttendanceRecords(parsedUser); // Fetch attendance records with fresh user data
             } else {
                 Alert.alert("Session Expired", "Please login again.");
                 router.replace('/');
@@ -86,7 +100,7 @@ export default function Dashboard() {
         }
     };
 
-    const fetchAttendanceRecords = async () => {
+    const fetchAttendanceRecords = async (currentUser = user) => {
         setLoadingAttendance(true);
         try {
             const authToken = await AsyncStorage.getItem('auth_token');
@@ -95,7 +109,7 @@ export default function Dashboard() {
                 return;
             }
 
-            const response = await fetch('https://myomegahrms.in/api/hr/attendance/my_records/', {
+            const response = await fetch(`${Config.API_BASE_URL}/attendance/my_records/`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${authToken}`,
@@ -123,42 +137,30 @@ export default function Dashboard() {
 
             setAttendanceRecords(records);
 
-            // Check if user is currently punched in (sync state with API)
-            if (user && data.length > 0) {
+            // Check for ANY active session today
+            if (currentUser && data.length > 0) {
                 const todayDate = new Date().toISOString().split('T')[0];
-                const todayRecord = data.find((record: any) => record.date === todayDate);
+                const todayRecords = data.filter((record: any) => record.date === todayDate);
 
-                if (todayRecord) {
-                    // If there's a punch_in_time but no punch_out_time, user is currently punched in
-                    const isCurrentlyPunchedIn = todayRecord.punch_in_time && !todayRecord.punch_out_time;
+                // Find if there is an active session (punched in but not out)
+                const activeRecord = todayRecords.find((record: any) => record.punch_in_time && !record.punch_out_time);
 
-                    const keys = getKeys(user.id);
+                const keys = getKeys(currentUser.id);
 
-                    if (isCurrentlyPunchedIn) {
-                        // User is punched in according to API
-                        // Check if we have local punch-in time, if not, set it to API time
-                        const localPunchIn = await AsyncStorage.getItem(keys.PUNCH_IN);
-                        if (!localPunchIn) {
-                            // Convert API time to timestamp
-                            const punchInTimestamp = new Date(todayRecord.punch_in_time).getTime().toString();
-                            await AsyncStorage.setItem(keys.PUNCH_IN, punchInTimestamp);
-                        }
-                        setIsPunchedIn(true);
-                    } else {
-                        // User is not punched in according to API
-                        // Clear local punch-in state if it exists
-                        await AsyncStorage.removeItem(keys.PUNCH_IN);
-                        setIsPunchedIn(false);
-                        setElapsedSeconds(0);
+                if (activeRecord) {
+                    // User is actively punched in
+                    const localPunchIn = await AsyncStorage.getItem(keys.PUNCH_IN);
+                    if (!localPunchIn) {
+                        // Convert API time to timestamp
+                        const punchInTimestamp = new Date(activeRecord.punch_in_time).getTime().toString();
+                        await AsyncStorage.setItem(keys.PUNCH_IN, punchInTimestamp);
                     }
+                    setIsPunchedIn(true);
                 } else {
-                    // No record for today, user is not punched in
-                    if (user) {
-                        const keys = getKeys(user.id);
-                        await AsyncStorage.removeItem(keys.PUNCH_IN);
-                        setIsPunchedIn(false);
-                        setElapsedSeconds(0);
-                    }
+                    // No active session found for today
+                    await AsyncStorage.removeItem(keys.PUNCH_IN);
+                    setIsPunchedIn(false);
+                    setElapsedSeconds(0);
                 }
             }
         } catch (error) {
@@ -184,18 +186,22 @@ export default function Dashboard() {
         const keys = getKeys(user.id);
 
         const updateTimer = async () => {
-            if (!isPunchedIn) {
-                setElapsedSeconds(0);
-                return;
+            try {
+                if (!isPunchedIn) {
+                    setElapsedSeconds(0);
+                    return;
+                }
+
+                const storedPunchIn = await AsyncStorage.getItem(keys.PUNCH_IN);
+                if (!storedPunchIn) return;
+
+                const punchInTime = parseInt(storedPunchIn, 10);
+                const now = Date.now();
+                const diff = Math.floor((now - punchInTime) / 1000);
+                setElapsedSeconds(diff >= 0 ? diff : 0);
+            } catch (e) {
+                console.warn("Timer update error:", e);
             }
-
-            const storedPunchIn = await AsyncStorage.getItem(keys.PUNCH_IN);
-            if (!storedPunchIn) return;
-
-            const punchInTime = parseInt(storedPunchIn, 10);
-            const now = Date.now();
-            const diff = Math.floor((now - punchInTime) / 1000);
-            setElapsedSeconds(diff >= 0 ? diff : 0);
         };
 
         updateTimer();
@@ -287,15 +293,17 @@ export default function Dashboard() {
                 longitude: location.coords.longitude,
                 address: formattedAddress,
             };
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error getting location:", error);
-            Alert.alert("Location Error", "Failed to get your current location. Please try again.");
+            Alert.alert("Location Error", `Failed to get your current location. ${error?.message || ''}`);
             return null;
         }
     };
 
     const togglePunch = async () => {
-        if (!user) return;
+        if (!user || isPunching) return;
+
+        setIsPunching(true);
         const keys = getKeys(user.id);
 
         try {
@@ -316,7 +324,7 @@ export default function Dashboard() {
 
                 // Call Punch Out API
                 try {
-                    const response = await fetch('https://myomegahrms.in/api/hr/attendance/punch_out/', {
+                    const response = await fetch(`${Config.API_BASE_URL}/attendance/punch_out/`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -333,7 +341,8 @@ export default function Dashboard() {
 
                     if (!response.ok) {
                         console.error("Punch out API error:", data);
-                        Alert.alert("Punch Out Failed", data.detail || "Failed to punch out. Please try again.");
+                        const errorMsg = JSON.stringify(data);
+                        Alert.alert("Punch Out Debug", `Status: ${response.status}\nResponse: ${errorMsg}`);
                         return;
                     }
 
@@ -411,7 +420,7 @@ export default function Dashboard() {
 
                 // Call Punch In API
                 try {
-                    const response = await fetch('https://myomegahrms.in/api/hr/attendance/punch_in/', {
+                    const response = await fetch(`${Config.API_BASE_URL}/attendance/punch_in/`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -428,7 +437,9 @@ export default function Dashboard() {
 
                     if (!response.ok) {
                         console.error("Punch in API error:", data);
-                        Alert.alert("Punch In Failed", data.detail || "Failed to punch in. Please try again.");
+                        // Show more detailed error for debugging
+                        const errorMsg = JSON.stringify(data);
+                        Alert.alert("Punch In Debug", `Status: ${response.status}\nResponse: ${errorMsg}`);
                         return;
                     }
 
@@ -450,6 +461,8 @@ export default function Dashboard() {
         } catch (e) {
             console.error("Failed to toggle punch state", e);
             Alert.alert("Error", "An unexpected error occurred. Please try again.");
+        } finally {
+            setIsPunching(false);
         }
     };
 
@@ -457,6 +470,7 @@ export default function Dashboard() {
         setIsProfileVisible(false);
         await AsyncStorage.removeItem('auth_token');
         await AsyncStorage.removeItem('user_data');
+        await AsyncStorage.removeItem('login_timestamp');
         router.replace('/');
     };
 
@@ -568,13 +582,20 @@ export default function Dashboard() {
 
                 <View style={styles.actionContainer}>
                     <TouchableOpacity
-                        style={[styles.circularButton, { backgroundColor: punchButtonColor }]}
+                        style={[styles.circularButton, { backgroundColor: punchButtonColor, opacity: isPunching ? 0.7 : 1 }]}
                         onPress={togglePunch}
                         activeOpacity={0.8}
+                        disabled={isPunching}
                     >
                         <View style={styles.innerCircleOutline}>
-                            <Ionicons name="finger-print" size={50} color={Colors.white} />
-                            <Text style={styles.buttonText}>{punchButtonText}</Text>
+                            {isPunching ? (
+                                <ActivityIndicator size="large" color={Colors.white} />
+                            ) : (
+                                <>
+                                    <Ionicons name="finger-print" size={50} color={Colors.white} />
+                                    <Text style={styles.buttonText}>{punchButtonText}</Text>
+                                </>
+                            )}
                         </View>
                     </TouchableOpacity>
                 </View>
@@ -597,6 +618,42 @@ export default function Dashboard() {
                         )}
                     </View>
                 )}
+
+                {/* Services Section */}
+                <View style={styles.servicesContainer}>
+                    <Text style={styles.bottomPanelTitle}>My Services</Text>
+                    <View style={styles.servicesGrid}>
+                        <TouchableOpacity
+                            style={styles.serviceItem}
+                            onPress={() => router.push({ pathname: '/requests', params: { type: 'leave' } })}
+                        >
+                            <View style={[styles.serviceIconContainer, { backgroundColor: '#E3F2FD' }]}>
+                                <Ionicons name="calendar" size={24} color="#1E88E5" />
+                            </View>
+                            <Text style={styles.serviceText}>Leave</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.serviceItem}
+                            onPress={() => router.push({ pathname: '/requests', params: { type: 'late' } })}
+                        >
+                            <View style={[styles.serviceIconContainer, { backgroundColor: '#FFF3E0' }]}>
+                                <Ionicons name="time" size={24} color="#FB8C00" />
+                            </View>
+                            <Text style={styles.serviceText}>Late Req</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.serviceItem}
+                            onPress={() => router.push({ pathname: '/requests', params: { type: 'early' } })}
+                        >
+                            <View style={[styles.serviceIconContainer, { backgroundColor: '#F3E5F5' }]}>
+                                <Ionicons name="exit" size={24} color="#8E24AA" />
+                            </View>
+                            <Text style={styles.serviceText}>Early Req</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
 
                 {/* Attendance Log Section */}
                 <View style={styles.attendancePanel}>
@@ -857,14 +914,47 @@ const styles = StyleSheet.create({
     locationContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 30,
         marginTop: 20,
+        marginBottom: 20,
     },
     locationText: {
-        fontSize: 14,
+        fontSize: 12,
         color: Colors.textSecondary,
-        marginLeft: 4,
-        fontWeight: '500',
+        marginLeft: 5,
+    },
+    servicesContainer: {
+        width: '90%',
+        backgroundColor: Colors.card,
+        borderRadius: 20,
+        padding: 20,
+        marginBottom: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 3,
+    },
+    servicesGrid: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 15,
+    },
+    serviceItem: {
+        alignItems: 'center',
+        width: '30%',
+    },
+    serviceIconContainer: {
+        width: 55,
+        height: 55,
+        borderRadius: 15,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    serviceText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: Colors.text,
     },
     bottomPanel: {
         width: '90%',
