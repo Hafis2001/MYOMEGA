@@ -11,8 +11,10 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to verify you are at the office when punching in/out."
-      }
+        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to verify you are at the office when punching in/out.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.hafis_riswan.MYOMEGA"
     },
     "android": {
       "adaptiveIcon": {
@@ -25,7 +27,7 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
       ],
-      "package": "com.imcbs.MYOMEGA"
+      "package": "com.hafis_riswan.MYOMEGA"
     },
     "web": {
       "output": "static",
@@ -50,10 +52,11 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
+    "owner": "hafis_riswan",
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "7f9d3c2e-fd5f-4024-b5e1-6d7306bbc3d3"
+        "projectId": "1ac14247-da09-4aef-9861-3fb6d2af5e9d"
       }
     }
   }
