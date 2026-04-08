@@ -14,7 +14,7 @@
         "NSLocationWhenInUseUsageDescription": "This app needs access to your location to verify you are at the office when punching in/out.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.hafis_riswan.MYOMEGA"
+      "bundleIdentifier": "com.imcbs.MYOMEGA"
     },
     "android": {
       "adaptiveIcon": {
@@ -27,7 +27,7 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
       ],
-      "package": "com.hafis_riswan.MYOMEGA"
+      "package": "com.imcbs.MYOMEGA"
     },
     "web": {
       "output": "static",
