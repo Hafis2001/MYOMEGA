@@ -2,21 +2,27 @@
   "expo": {
     "name": "MYOMEGA",
     "slug": "MYOMEGA",
-    "version": "1.0.0",
+    "version": "1.1.1",
     "orientation": "portrait",
     "icon": "./assets/images/custom-icon.png",
     "scheme": "myomega",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true,
-      "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to verify you are at the office when punching in/out.",
+  "supportsTablet": true,
+  "buildNumber": "10",
+  "infoPlist": {
+    "NSLocationWhenInUseUsageDescription": "MYOMEGA needs your location to verify you are at the office when punching in or out.",
+    "NSLocationAlwaysAndWhenInUseUsageDescription": "MYOMEGA needs your location to verify you are at the office when punching in or out.",
+    "NSLocationTemporaryUsageDescriptionDictionary": {
+      "PunchInAccuracy": "A precise location is needed to confirm you are within office premises."
+    },
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.hafis2001.MYOMEGA"
+      "bundleIdentifier": "com.imcbs.MYOMEGA"
     },
     "android": {
+      "versionCode": 9,
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/custom-icon.png"
@@ -27,7 +33,7 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
       ],
-      "package": "com.hafis2001.MYOMEGA"
+      "package": "com.hafis_riswan.MYOMEGA"
     },
     "web": {
       "output": "static",
@@ -52,7 +58,6 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
-    // "owner": "hafis_riswan",
     "extra": {
       "router": {},
       "eas": {

@@ -34,69 +34,15 @@ export default function NewRequestScreen() {
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [time, setTime] = useState(''); // We'll use this for 'minutes'
     const [isPickerVisible, setIsPickerVisible] = useState(false);
-    const [leaveTypes, setLeaveTypes] = useState<{id: string, name: string}[]>([]);
+    const [leaveTypes, setLeaveTypes] = useState<{id: string, name: string}[]>([
+        { id: '5', name: 'Casual Leave' },
+        { id: '9', name: 'SICK LEAVE' }
+    ]);
 
     useEffect(() => {
-        if (requestType === 'leave') {
-            const fetchLeaveTypes = async () => {
-                try {
-                    const authToken = await AsyncStorage.getItem('auth_token');
-                    // Extract domain from Config to hit the master API
-                    const domain = Config.API_BASE_URL.replace('/api/hr', '');
-                    const url = `${domain}/api/master/`;
-                    
-                    console.log(`[DEBUG] Fetching leave types from ${url}`);
-                    const response = await fetch(url, {
-                        headers: { 'Authorization': `Bearer ${authToken}` }
-                    });
-                    
-                    const data = await response.json();
-                    
-                    let records = [];
-                    if (Array.isArray(data)) records = data;
-                    else if (data.results && Array.isArray(data.results)) records = data.results;
-                    else if (data.data && Array.isArray(data.data)) records = data.data;
-                    
-                    // Extract and filter specifically for Casual and Sick leaves
-                    let mappedLeaves = records
-                        .map((r: any) => ({
-                            id: String(r.id || r.pk || r.value),
-                            name: r.name || r.leave_type || r.title || r.type || r.master_value || r.leave_name || `Type ${r.id}`
-                        }))
-                        .filter((leave: any) => {
-                            const lowercaseName = leave.name.toLowerCase();
-                            return lowercaseName.includes('casual') || lowercaseName.includes('sick');
-                        });
-
-                    // Deduplicate by name to prevent multiple entries (e.g., two "Casual Leave" options)
-                    const seenNames = new Set();
-                    mappedLeaves = mappedLeaves.filter((leave: any) => {
-                        const nameKey = leave.name.trim().toLowerCase();
-                        if (seenNames.has(nameKey)) {
-                            return false;
-                        }
-                        seenNames.add(nameKey);
-                        return true;
-                    });
-
-                    if (mappedLeaves.length > 0) {
-                        setLeaveTypes(mappedLeaves);
-                        // Auto-select the first valid leave type found
-                        if (!mappedLeaves.find((l: any) => l.id === leaveMaster)) {
-                            setLeaveMaster(mappedLeaves[0].id);
-                        }
-                    } else {
-                        Alert.alert('Notice', 'No leave types retrieved from the master API.');
-                        setLeaveTypes([]);
-                    }
-                } catch (error: any) {
-                    console.error('[DEBUG] Error fetching leave types:', error);
-                    Alert.alert('Error', 'Failed to load leave types. Please check your network or server status.');
-                    setLeaveTypes([]);
-                }
-            };
-            
-            fetchLeaveTypes();
+        // Leave types are hardcoded, so no need to fetch from API.
+        if (requestType === 'leave' && !leaveMaster) {
+            setLeaveMaster('5');
         }
     }, [requestType]);
 
@@ -139,37 +85,30 @@ export default function NewRequestScreen() {
 
         try {
             const authToken = await AsyncStorage.getItem('auth_token');
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000); // Increased timeout to 30 seconds
-
-            const response = await fetch(url, {
+            
+            // Fire network request in background (no await) to make UI instantly responsive
+            fetch(url, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${authToken}`,
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(body),
-                signal: controller.signal,
+            }).then(async (response) => {
+                if (!response.ok) {
+                    const data = await response.json();
+                    Alert.alert('Submission Failed', data.detail || 'Something went wrong.');
+                }
+            }).catch(error => {
+                Alert.alert('Network Error', 'Failed to connect to server.');
             });
 
-            clearTimeout(timeoutId);
-            
-            if (response.ok) {
-                Alert.alert('Success', 'Request submitted successfully!', [
-                    { text: 'OK', onPress: () => router.back() }
-                ]);
-            } else {
-                const data = await response.json();
-                console.warn(`[DEBUG] Submission failed with status ${response.status}:`, data);
-                Alert.alert('Submission Failed', data.detail || 'Something went wrong. Please try again.');
-            }
-        } catch (error: any) {
-            console.error(`[DEBUG] Error submitting request to ${url}:`, error);
-            if (error.name === 'AbortError') {
-                Alert.alert('Timeout', 'The request took too long. Is your server running?');
-            } else {
-                Alert.alert('Network Error', `Failed to connect to ${url}. Please ensure your server is reachable.`);
-            }
+            // Instantly show success and go back
+            Alert.alert('Success', 'Request submitted successfully!', [
+                { text: 'OK', onPress: () => router.back() }
+            ]);
+        } catch (error) {
+            Alert.alert('Error', 'An unexpected error occurred.');
         } finally {
             setLoading(false);
         }

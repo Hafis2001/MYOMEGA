@@ -37,6 +37,7 @@ export default function RequestsScreen() {
     const [refreshing, setRefreshing] = useState(false);
 
     useEffect(() => {
+        setRequests([]); // Instantly clear old data when switching tabs
         fetchRequests();
     }, [activeTab]);
 
@@ -49,7 +50,7 @@ export default function RequestsScreen() {
     };
 
     const fetchRequests = async () => {
-        setLoading(true);
+        setRefreshing(true); // Show non-blocking refresh spinner instead of full-screen loader
         const url = getApiUrl(activeTab);
         console.log(`[DEBUG] Fetching requests from: ${url}`);
         
@@ -99,7 +100,7 @@ export default function RequestsScreen() {
         }
     };
 
-    const renderRequestItem = ({ item }: { item: any }) => (
+    const renderRequestItem = React.useCallback(({ item }: { item: any }) => (
         <View style={styles.requestCard}>
             <View style={styles.cardHeader}>
                 <View style={styles.typeBadge}>
@@ -135,7 +136,7 @@ export default function RequestsScreen() {
                 <Text style={styles.timestamp}>Submitted on {new Date(item.created_at || Date.now()).toLocaleDateString()}</Text>
             </View>
         </View>
-    );
+    ), [activeTab]);
 
     return (
         <View style={styles.container}>
@@ -163,6 +164,8 @@ export default function RequestsScreen() {
                     renderItem={renderRequestItem}
                     keyExtractor={(item) => item.id.toString()}
                     contentContainerStyle={styles.listContent}
+                    initialNumToRender={10}
+                    windowSize={5}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
                     ListEmptyComponent={() => (
                         <View style={styles.emptyContainer}>
