@@ -271,7 +271,7 @@ export default function Dashboard() {
     };
 
     const fetchAttendanceRecords = async (currentUser = user) => {
-        setLoadingAttendance(true);
+        // Run completely in background without blocking UI
         try {
             const authToken = await AsyncStorage.getItem('auth_token');
             if (!authToken) return;
@@ -472,6 +472,14 @@ export default function Dashboard() {
         const wasPunchedIn = isPunchedIn;
         const targetState = !wasPunchedIn;
 
+        if (targetState) {
+            const todayStr = getLocalTodayString();
+            const hasPunchedToday = attendanceRecords.some(r => r.date === todayStr && r.punch_in_time);
+            if (hasPunchedToday) {
+                return;
+            }
+        }
+
         // 🚀 OPTIMISTIC UPDATE: Instantly flip the button and start/stop the timer!
         setIsPunchedIn(targetState);
         if (targetState) {
@@ -528,7 +536,10 @@ export default function Dashboard() {
                     const errorMsg = data.message || data.error || data.detail || (typeof data === 'string' ? data : JSON.stringify(data));
                     
                     if (targetState && errorMsg.toLowerCase().includes("already") && errorMsg.toLowerCase().includes("punched in")) {
-                        // Already synced!
+                        setIsPunchedIn(wasPunchedIn);
+                        if (wasPunchedIn) await AsyncStorage.setItem(keys.PUNCH_IN, Date.now().toString());
+                        else await AsyncStorage.removeItem(keys.PUNCH_IN);
+                        Alert.alert("Already Punched In", "Today's punch in is already done.");
                     } else if (!targetState && errorMsg.toLowerCase().includes("already") && errorMsg.toLowerCase().includes("punched out")) {
                         // Already synced!
                     } else {
@@ -575,8 +586,11 @@ export default function Dashboard() {
     const getUserName = () => user?.name || user?.email?.split('@')[0] || 'User';
     const getUserInitial = () => getUserName().charAt(0).toUpperCase();
 
-    const punchBg = isPunchedIn ? Colors.success : Colors.primary;
-    const punchRingBorder = isPunchedIn ? 'rgba(22,163,74,0.3)' : 'rgba(199,36,6,0.25)';
+    const todayStr = getLocalTodayString();
+    const isPunchDoneForToday = !isPunchedIn && attendanceRecords.some(r => r.date === todayStr && r.punch_in_time);
+
+    const punchBg = isPunchedIn ? Colors.primary : Colors.success;
+    const punchRingBorder = isPunchedIn ? 'rgba(199,36,6,0.25)' : 'rgba(22,163,74,0.3)';
 
     if (loading) {
         return (
@@ -587,7 +601,6 @@ export default function Dashboard() {
         );
     }
 
-    const todayStr = getLocalTodayString();
     const filteredRecords = [...attendanceRecords].sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     ).filter(r => showAllAttendance || r.date === todayStr);
@@ -644,10 +657,10 @@ export default function Dashboard() {
                         <TouchableOpacity
                             style={[
                                 styles.punchButton,
-                                { backgroundColor: punchBg, shadowColor: punchBg }
+                                { backgroundColor: isPunchDoneForToday ? '#9CA3AF' : punchBg, shadowColor: isPunchDoneForToday ? '#9CA3AF' : punchBg }
                             ]}
                             onPress={togglePunch}
-                            disabled={isPunching}
+                            disabled={isPunching || isPunchDoneForToday}
                             activeOpacity={0.82}
                         >
                             <View style={styles.punchInnerRing}>
@@ -656,15 +669,15 @@ export default function Dashboard() {
                                 ) : (
                                     <>
                                         <Ionicons
-                                            name={isPunchedIn ? 'stop-circle' : 'finger-print'}
+                                            name={isPunchDoneForToday ? 'checkmark-done-circle' : (isPunchedIn ? 'stop-circle' : 'finger-print')}
                                             size={54}
                                             color={Colors.white}
                                         />
                                         <Text style={styles.punchLabel}>
-                                            {isPunchedIn ? 'PUNCH OUT' : 'PUNCH IN'}
+                                            {isPunchDoneForToday ? 'DONE FOR TODAY' : (isPunchedIn ? 'PUNCH OUT' : 'PUNCH IN')}
                                         </Text>
                                         <Text style={styles.punchSublabel}>
-                                            {isPunchedIn ? 'Tap to clock out' : 'Tap to clock in'}
+                                            {isPunchDoneForToday ? 'Attendance complete' : (isPunchedIn ? 'Tap to clock out' : 'Tap to clock in')}
                                         </Text>
                                     </>
                                 )}
@@ -740,7 +753,7 @@ export default function Dashboard() {
                             const sorted = [...attendanceRecords].sort(
                                 (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
                             );
-                            const todayStr = new Date().toISOString().split('T')[0];
+                            const todayStr = getLocalTodayString();
                             const displayed = showAllAttendance ? sorted : sorted.filter(r => r.date === todayStr);
 
                             if (displayed.length === 0) {
